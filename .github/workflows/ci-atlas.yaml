@@ -1,0 +1,90 @@
+name: Atlas
+
+on:
+  pull_request:
+    paths:
+      - 'config/**'
+      - 'atlas.hcl'
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/atlas.yml
+      - 'config/**'
+      - 'atlas.hcl'
+
+# Permissions to write comments on the pull request.
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  ATLAS_DEBUG: true
+  PROD_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL || 'postgres://postgres:pass@localhost:5432/prod?sslmode=disable' }}
+
+jobs:
+  atlas:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: supabase/postgres:15.6.1.132
+        env:
+          POSTGRES_PASSWORD: pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Create local dev database
+        env:
+          PGPASSWORD: pass
+        run: psql -h localhost -p 5432 -U postgres -d postgres --command 'CREATE DATABASE "dev";'
+
+      - name: Create local prod database
+        env:
+          PGPASSWORD: pass
+        run: psql -h localhost -p 5432 -U postgres -d postgres --command 'CREATE DATABASE "prod";'
+
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ariga/setup-atlas@v0
+        with:
+          cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN_9THEU0 }}
+
+      - uses: ariga/atlas-action/migrate/lint@v1
+        with:
+          dir: 'file://migrations'
+          dir-name: 'atlas-supabase'
+          config: 'file://atlas.hcl'
+          env: 'common'
+
+      - uses: ariga/atlas-action/migrate/push@v1
+        if: github.ref == 'refs/heads/master'
+        with:
+          dir: 'file://migrations'
+          dir-name: 'atlas-supabase'
+          config: 'file://atlas.hcl'
+          env: 'common'
+
+      - uses: ariga/atlas-action/migrate/apply@v1
+        if: github.ref == 'refs/heads/master'
+        with:
+          dir: 'atlas://atlas-supabase'
+          config: 'file://atlas.hcl'
+          env: 'common'
+          vars: '{"database_url": "${{ env.PROD_DATABASE_URL }}"}'

@@ -24,38 +24,44 @@ lint {
 
 variable "database_url" {
   type = string
-  default = "postgres://postgres:pass@:5432/demo?sslmode=disable"
+  default = "postgres://postgres:pass@:5432/prod?sslmode=disable"
 }
 
 variable "dev_database_url" {
   type = string
-  default = "postgres://postgres:pass@:5432/demo_dev?sslmode=disable"
+  default = "postgres://postgres:pass@:5432/dev?sslmode=disable"
 }
 
-data "composite_schema" "demo" {
-  # User schema with basic user management
-  schema "demo_user" {
+data "composite_schema" "project" {
+  # User schema
+  schema "org_user" {
     url = "file://config/schema/user.sql"
   }
 
-  # Product schema for demo purposes
-  schema "demo_product" {
+  # Product schema
+  schema "org_product" {
     url = "file://config/schema/product.sql"
   }
 
-  # User-related functions
-  schema "demo_user" {
+  # ----------------------------------
+  # Function files specific to schema
+  # ensure that name of schema is same
+  # as above
+  # ----------------------------------
+
+  # Functions related to user schema
+  schema "org_user" {
     url = "file://config/function/user_functions.sql"
   }
 }
 
 locals {
-  schema_url = data.composite_schema.demo.url
+    schema_url = data.composite_schema.project.url
 }
 
 # environment block
 # refer https://atlasgo.io/atlas-schema/projects
-env "demo" {
+env "common" {
   # Define the URL of the database which is managed
   # in this environment
   url = var.database_url
