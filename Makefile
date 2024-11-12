@@ -1,4 +1,4 @@
-.PHONY: setup local lint diff check apply inspect clean help
+.PHONY: setup local lint diff check apply inspect clean test-ci help
 
 # Setup local development environment
 setup:
@@ -21,40 +21,40 @@ local:
 		sleep 2; \
 	done
 
-	@echo "Creating demo database..."
-	@docker exec -i atlas-demo psql -U postgres -d postgres --command "SELECT 1 FROM pg_database WHERE datname = 'demo'" | grep -q 1 || \
-	docker exec -i atlas-demo psql -U postgres -d postgres --command "CREATE DATABASE demo"
+	@echo "Creating prod database..."
+	@docker exec -i atlas-demo psql -U postgres -d postgres --command "SELECT 1 FROM pg_database WHERE datname = 'prod'" | grep -q 1 || \
+	docker exec -i atlas-demo psql -U postgres -d postgres --command 'CREATE DATABASE "prod";'
 	
-	@echo "Creating demo_dev database..."
-	@docker exec -i atlas-demo psql -U postgres -d postgres --command "SELECT 1 FROM pg_database WHERE datname = 'demo_dev'" | grep -q 1 || \
-	docker exec -i atlas-demo psql -U postgres -d postgres --command "CREATE DATABASE demo_dev"
+	@echo "Creating dev database..."
+	@docker exec -i atlas-demo psql -U postgres -d postgres --command "SELECT 1 FROM pg_database WHERE datname = 'dev'" | grep -q 1 || \
+	docker exec -i atlas-demo psql -U postgres -d postgres --command 'CREATE DATABASE "dev";'
 
 	@echo "Applying current schema..."
 	@make apply
 
 # Lint schema changes
 lint:
-	atlas migrate lint --env demo
+	atlas migrate lint --env common
 
 # Create migration files
 diff:
-	atlas migrate diff --env demo
+	atlas migrate diff --env common
 
 # Check schema changes (dry run)
 check:
-	atlas schema apply --env demo --dry-run
+	atlas schema apply --env common --dry-run
 
 # Apply schema changes
 apply:
-	atlas schema apply --env demo
+	atlas schema apply --env common
 
 # Inspect current schema
 inspect:
-	atlas schema inspect --env demo
+	atlas schema inspect --env common
 
 # Inspect schema visually
 visualinspect:
-	atlas schema inspect --env demo -w
+	atlas schema inspect --env common -w
 
 # Clean up local environment
 clean:
@@ -64,15 +64,41 @@ clean:
 	fi
 	@echo "Cleanup complete"
 
+# Test GitHub Actions locally
+test-ci: test-ci-setup test-ci-run
+
+# Setup for GitHub Actions local testing
+test-ci-setup:
+	@echo "Setting up GitHub Actions local testing environment..."
+	@if ! command -v gh &> /dev/null; then \
+		echo "Installing GitHub CLI..."; \
+		sudo apt-get update && sudo apt-get install -y gh; \
+	fi
+	@if ! gh extension list | grep -q "nektos/gh-act"; then \
+		echo "Installing act extension..."; \
+		gh extension install https://github.com/nektos/gh-act; \
+	fi
+
+# Run GitHub Actions workflows locally
+test-ci-run:
+	@echo "Testing GitHub Actions workflows locally..."
+	@echo "Testing push workflow..."
+	gh act push
+	@echo "Testing pull_request workflow..."
+	gh act pull_request
+
 # Help command
 help:
 	@echo "Available commands:"
-	@echo "  make setup   		- Setup local development environment"
-	@echo "  make local   		- Start local database and apply schema"
-	@echo "  make lint    		- Lint schema changes"
-	@echo "  make diff    		- Show schema changes"
-	@echo "  make check   		- Check schema changes (dry run)"
-	@echo "  make apply   		- Apply schema changes"
-	@echo "  make inspect 		- Inspect current schema"
-	@echo "  make visualinspect - Inspect visually current schema using atlasgo"
-	@echo "  make clean   		- Clean up local environment"
+	@echo "  make setup     		- Setup local development environment"
+	@echo "  make local     		- Start local database and apply schema"
+	@echo "  make lint      		- Lint schema changes"
+	@echo "  make diff      		- Show schema changes"
+	@echo "  make check     		- Check schema changes (dry run)"
+	@echo "  make apply     		- Apply schema changes"
+	@echo "  make inspect   		- Inspect current schema"
+	@echo "  make visualinspect  	- Inspect current schema visually using atlasgo"
+	@echo "  make clean     		- Clean up local environment"
+	@echo "  make test-ci   		- Test GitHub Actions workflows locally"
+	@echo "  make test-ci-setup 	- Setup GitHub Actions local testing"
+	@echo "  make test-ci-run   	- Run GitHub Actions workflows locally"

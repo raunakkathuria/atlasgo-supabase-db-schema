@@ -1,62 +1,90 @@
-name: Atlas Schema Management
+name: Atlas
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'config/**'
-      - 'atlas.hcl'
   pull_request:
     paths:
       - 'config/**'
       - 'atlas.hcl'
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/atlas.yml
+      - 'config/**'
+      - 'atlas.hcl'
+
+# Permissions to write comments on the pull request.
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  ATLAS_DEBUG: true
+  PROD_DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL || 'postgres://postgres:pass@localhost:5432/prod?sslmode=disable' }}
 
 jobs:
-  lint:
-    name: Lint Schema Changes
+  atlas:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
 
-      - name: Install Atlas
-        run: |
-          curl -sSf https://atlasgo.sh | sh
-
-      - name: Run Atlas Lint
-        run: atlas migrate lint --env demo
+    services:
+      postgres:
+        image: supabase/postgres:15.6.1.132
         env:
-          ATLAS_DEBUG: true
+          POSTGRES_PASSWORD: pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
-  check:
-    name: Check Schema Changes
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Install Atlas
+      - name: Install PostgreSQL client
         run: |
-          curl -sSf https://atlasgo.sh | sh
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
 
-      - name: Check Schema Changes
-        run: atlas schema apply --env demo --dry-run
+      - name: Create local dev database
         env:
-          ATLAS_DEBUG: true
+          PGPASSWORD: pass
+        run: psql -h localhost -p 5432 -U postgres -d postgres --command 'CREATE DATABASE "dev";'
 
-  apply:
-    name: Apply Schema Changes
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
+      - name: Create local prod database
+        env:
+          PGPASSWORD: pass
+        run: psql -h localhost -p 5432 -U postgres -d postgres --command 'CREATE DATABASE "prod";'
+
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Install Atlas
-        run: |
-          curl -sSf https://atlasgo.sh | sh
+      - uses: ariga/setup-atlas@v0
+        with:
+          cloud-token: ${{ secrets.ATLAS_CLOUD_TOKEN }}
 
-      - name: Apply Schema Changes
-        run: atlas schema apply --env demo --url "${{ secrets.SUPABASE_URL }}"
-        env:
-          ATLAS_DEBUG: true
+      - uses: ariga/atlas-action/migrate/lint@v1
+        with:
+          dir: 'file://migrations'
+          dir-name: 'atlas-supabase'
+          config: 'file://atlas.hcl'
+          env: 'common'
+
+      - uses: ariga/atlas-action/migrate/push@v1
+        if: github.ref == 'refs/heads/master'
+        with:
+          dir: 'file://migrations'
+          dir-name: 'atlas-supabase'
+          config: 'file://atlas.hcl'
+          env: 'common'
+
+      - uses: ariga/atlas-action/migrate/apply@v1
+        if: github.ref == 'refs/heads/master'
+        with:
+          dir: 'atlas://atlas-supabase'
+          config: 'file://atlas.hcl'
+          env: 'common'
+          vars: '{"database_url": "${{ env.PROD_DATABASE_URL }}"}'
