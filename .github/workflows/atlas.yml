@@ -1,0 +1,62 @@
+name: Atlas Schema Management
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'config/**'
+      - 'atlas.hcl'
+  pull_request:
+    paths:
+      - 'config/**'
+      - 'atlas.hcl'
+
+jobs:
+  lint:
+    name: Lint Schema Changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Atlas
+        run: |
+          curl -sSf https://atlasgo.sh | sh
+
+      - name: Run Atlas Lint
+        run: atlas migrate lint --env demo
+        env:
+          ATLAS_DEBUG: true
+
+  check:
+    name: Check Schema Changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Atlas
+        run: |
+          curl -sSf https://atlasgo.sh | sh
+
+      - name: Check Schema Changes
+        run: atlas schema apply --env demo --dry-run
+        env:
+          ATLAS_DEBUG: true
+
+  apply:
+    name: Apply Schema Changes
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install Atlas
+        run: |
+          curl -sSf https://atlasgo.sh | sh
+
+      - name: Apply Schema Changes
+        run: atlas schema apply --env demo --url "${{ secrets.SUPABASE_URL }}"
+        env:
+          ATLAS_DEBUG: true
