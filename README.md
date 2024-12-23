@@ -14,12 +14,12 @@ A production-ready database schema management solution using [Atlas](https://atl
 
 ## Features
 
-• Automated schema management with Atlas and GitHub Actions
-• Supabase-compatible PostgreSQL schema definitions
-• Built-in user authentication and product management schemas
-• Production-grade utility functions and database triggers
-• Docker-based local development environment
-• Comprehensive CI/CD pipeline for safe schema deployments
+- Automated schema management with Atlas and GitHub Actions
+- Supabase-compatible PostgreSQL schema definitions
+- Built-in user authentication and product management schemas
+- Production-grade utility functions and database triggers
+- Docker-based local development environment
+- Comprehensive CI/CD pipeline for safe schema deployments
 
 ## Quick Start
 
